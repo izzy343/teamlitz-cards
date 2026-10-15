@@ -2,7 +2,10 @@
 
 Usage:
   python3 teamlitz_render.py schedule data.json out.png
-  python3 teamlitz_render.py scout    data.json out.png  coach_avatar.jpg
+  python3 teamlitz_render.py scout      data.json out.png  coach_avatar.jpg   (one tall card)
+  python3 teamlitz_render.py scout_main data.json out.png  coach_avatar.jpg   (scouting report, no keys)
+  python3 teamlitz_render.py scout_keys data.json out.png  coach_avatar.jpg   (keys to the game only)
+GroupMe drops tall images, so post scout_main then scout_keys instead of one tall scout card.
 
 schedule data.json:
   {"date_label": "Thursday, Oct 15", "updated": "Tue 10/13, 3:05 PM",
@@ -99,7 +102,8 @@ def schedule_html(d):
             f'<div class="foot">PSBL schedule · checked {e(d["updated"])}</div></div>')
 
 
-def scout_html(d, avatar_path):
+def scout_html(d, avatar_path, part="full"):
+    """part: "full" (one card), "main" (no keys), or "keys" (keys-only card)."""
     mime = "image/png" if avatar_path.lower().endswith(".png") else "image/jpeg"
     coach = base64.b64encode(open(avatar_path, "rb").read()).decode()
     stats = "".join(f'<div class="stat"><div class="v">{e(s["v"])}</div><div class="l">{e(s["l"])}</div></div>' for s in d["stats"])
@@ -116,14 +120,34 @@ def scout_html(d, avatar_path):
             f'<div class="oppmeta">{e(d["opp_meta"])}</div><div class="stats">{stats}</div>'
             f'<h3>LAST {len(d["last_games"])} GAMES</h3><table>{games}</table>'
             + (f'<h3>COMMON OPPONENT{"S" if len(d.get("common", [])) > 1 else ""}</h3>{common}' if common else "")
-            + f'<h3>KEYS TO THE GAME</h3><ol>{keys}</ol>'
-            f'<div class="foot">PSBL standings &amp; results · checked {e(d["updated"])}</div></div>')
+            + (f'<h3>KEYS TO THE GAME</h3><ol>{keys}</ol>' if part == "full" else "")
+            + f'<div class="foot">PSBL standings &amp; results · checked {e(d["updated"])}</div></div>')
+
+
+def keys_html(d, avatar_path):
+    mime = "image/png" if avatar_path.lower().endswith(".png") else "image/jpeg"
+    coach = base64.b64encode(open(avatar_path, "rb").read()).decode()
+    keys = "".join(f'<li><b>{e(k["head"])}</b> {e(k["body"])}</li>' for k in d["keys"])
+    return (f'<style>{BASE_CSS}{SCOUT_CSS}</style><div class="card">'
+            f'<div class="hdr"><div class="t"><div class="kicker">TEAMLITZ · {e(d["game_label"]).upper()}</div>'
+            f'<div class="title">Keys to<br>the Game</div></div>'
+            f'<div class="coach"><img src="data:{mime};base64,{coach}"></div></div>'
+            f'<div class="olbl">VS</div><div class="oppname">{e(d["opponent"])}</div>'
+            f'<ol style="margin-top:18px">{keys}</ol>'
+            f'<div class="foot">Coach Fentress · checked {e(d["updated"])}</div></div>')
 
 
 def main():
     kind, data_path, out = sys.argv[1], sys.argv[2], sys.argv[3]
     d = json.load(open(data_path))
-    body = schedule_html(d) if kind == "schedule" else scout_html(d, sys.argv[4])
+    if kind == "schedule":
+        body = schedule_html(d)
+    elif kind == "scout_main":
+        body = scout_html(d, sys.argv[4], part="main")
+    elif kind == "scout_keys":
+        body = keys_html(d, sys.argv[4])
+    else:
+        body = scout_html(d, sys.argv[4])
     page = f'<!doctype html><html><head><meta charset="utf-8"></head><body>{body}</body></html>'
     with sync_playwright() as p:
         b = p.chromium.launch()
